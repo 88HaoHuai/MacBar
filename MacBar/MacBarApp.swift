@@ -20,7 +20,7 @@ struct MacBarApp: App {
         .menuBarExtraStyle(.window)
 
         Settings {
-            SettingsView()
+            SettingsView(menuBarManager: appDelegate.menuBarManager)
         }
     }
 }
@@ -37,7 +37,9 @@ private struct MacBarMenuBarExtraContent: View {
             if permissionManager.isAccessibilityGranted {
                 MacBarPanelView(
                     menuBarManager: menuBarManager,
-                    onClose: { },
+                    onClose: {
+                        NSApp.keyWindow?.close()
+                    },
                     onQuit: onQuit,
                     onShowSettings: onShowSettings
                 )

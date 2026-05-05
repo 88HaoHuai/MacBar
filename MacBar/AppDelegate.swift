@@ -1,19 +1,13 @@
 import AppKit
 import SwiftUI
 
-/// 应用委托，负责菜单栏图标的创建和面板管理
+/// 应用委托，负责菜单栏应用生命周期、权限窗口和 AppKit 桥接
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
 
-    // MacBar 自身的菜单栏图标（主入口）
-    private var statusItem: NSStatusItem?
-    // 隐藏占位符（利用超长宽度把左侧的图标挤出屏幕）
+    // 隐藏占位符：2.0 首版保留为可降级桥接点，默认不强制挤压菜单栏布局。
     private var hiderItem: NSStatusItem?
-    // 分隔符图标（作为用户可拖拽的边界标志，可选）
-    private var separatorItem: NSStatusItem?
 
-    // 弹出的浮动面板
-    private var panel: MacBarPanel?
     // 核心管理器
     let menuBarManager = MenuBarManager()
     // 权限管理器
@@ -42,9 +36,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 window.orderOut(nil)
             }
         }
-
-        // 菜单栏入口由 MacBarApp 中的 SwiftUI MenuBarExtra 提供。
-        // 保留 AppDelegate 负责权限、设置窗口和后续 AppKit 面板能力。
 
         startPermissionWarmupPolling()
     }
@@ -83,43 +74,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        // 系统会在进程退出时自动清理状态栏图标，不需要手动 removeStatusItem
+        menuBarManager.restoreHiddenMenuBarItems(reason: "app terminate")
         permissionWarmupTimer?.invalidate()
         permissionWarmupTimer = nil
-        statusItem = nil
         hiderItem = nil
-        separatorItem = nil
-    }
-
-    // MARK: - 状态栏图标设置
-
-    private func setupStatusItems() {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem = item
-        item.isVisible = true
-
-        if let button = item.button {
-            let image = NSImage(systemSymbolName: "square.grid.2x2.fill", accessibilityDescription: "MacBar")
-            image?.isTemplate = true
-            button.image = image
-            button.title = image == nil ? "MacBar" : " MacBar"
-            button.imageScaling = .scaleProportionallyDown
-            button.toolTip = "MacBar"
-            button.action = #selector(statusItemClicked)
-            button.target = self
-            button.isEnabled = true
-            NSLog("[MacBar] status item configured: image=\(image != nil), title=\(button.title)")
-        } else {
-            NSLog("[MacBar] status item button is nil")
-        }
-
-        hiderItem = nil
-        separatorItem = nil
     }
     
     // MARK: - 临时展开以触发菜单
     
-    func temporarilyUnhide(for action: @escaping () -> Void) {
+    func temporarilyRevealMenuBarItems(for action: @escaping () -> Void) {
         guard let hiderItem else {
             action()
             return
@@ -138,55 +101,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 hiderItem.length = originalLength
             }
         }
-    }
-
-    // MARK: - 点击菜单栏图标
-
-    @objc private func statusItemClicked() {
-        print("[MacBar] statusItemClicked START")
-        // 检查权限
-        guard permissionManager.isAccessibilityGranted else {
-            print("[MacBar] permission NOT granted, showing permission window")
-            showPermissionWindow()
-            print("[MacBar] statusItemClicked END (permission flow)")
-            return
-        }
-
-        if let panel = panel, panel.isVisible {
-            print("[MacBar] closing panel")
-            panel.close()
-        } else {
-            print("[MacBar] showing panel")
-            showPanel()
-        }
-        print("[MacBar] statusItemClicked END")
-    }
-
-    // MARK: - 展示浮动面板
-
-    private func showPanel() {
-        print("[MacBar] showPanel START")
-        menuBarManager.detectMenuBarItems()
-
-        print("[MacBar] showPanel: statusItem.button=\(statusItem?.button != nil ? "OK" : "nil")")
-        guard let statusItem,
-              let button = statusItem.button,
-              let buttonWindow = button.window else {
-            print("[MacBar] showPanel: button or buttonWindow is nil, returning")
-            return
-        }
-
-        print("[MacBar] showPanel: got buttonWindow")
-        let buttonFrame = buttonWindow.convertToScreen(button.frame)
-
-        if panel == nil {
-            print("[MacBar] showPanel: creating new MacBarPanel")
-            panel = MacBarPanel(menuBarManager: menuBarManager)
-        }
-
-        print("[MacBar] showPanel: calling showBelow")
-        panel?.showBelow(buttonFrame: buttonFrame)
-        print("[MacBar] showPanel END")
     }
 
     // MARK: - 权限相关
@@ -234,7 +148,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let hosting = NSHostingController(rootView: SettingsView())
+        let hosting = NSHostingController(rootView: SettingsView(menuBarManager: menuBarManager))
         let window = NSWindow(contentViewController: hosting)
         window.title = "MacBar 偏好设置"
         window.styleMask = [.titled, .closable]
