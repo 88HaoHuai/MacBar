@@ -15,6 +15,8 @@ MacBar 是一个 macOS 菜单栏图标聚合代理工具。它常驻在系统菜
 - 内置辅助功能权限引导页，授权后会自动重新检查权限。
 - 纯菜单栏应用模式运行，不显示 Dock 图标。
 
+<img width="559" height="81" alt="image" src="https://github.com/user-attachments/assets/6e13b4cd-62c1-42c8-bb6e-5db7cc18aa5d" />
+
 ## 系统要求
 
 - macOS 13.0 或更高版本。
